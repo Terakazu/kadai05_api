@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="css/sample.css">
+
+    <title>chatアプリ</title>
+</head>
+<body>
+    <h1>ご近所コミュニティ</h1>
+    <p>街の情報を共有しよう！</p>
+    <img id="tsunashima" src="img/tsunashima_01.jpg">
+
+    <!-- コンテンツ表示画面 -->
+<div class="main">
+    <div class="content">名前：<input type="text" id="uname"></div>
+    <div class="content">本文：
+        <textarea id="text" cols="30" rows="10"></textarea><br>
+        <button id="send">送信</button><br>
+    </div>
+    <div id="output" style="overflow: auto;height: 300px;">
+    </div>
+</div>
+
+<div id="replyInput" style="display: none;">
+  <div class="replyzone">
+    <div>名前：<input type="text" id="uname2"></div>
+    <div>
+        <textarea id="text2" cols="30" rows="10"></textarea>
+        <button id="reply2">送信</button>
+        <button id="return">戻る</button>
+    </div>
+  </div>
+   <div id="replyContainer" style="overflow: auto;height: 300px;"></div>
+</div>
+
+<!-- コメント表示用の要素 -->
+
+<!-- JQuery -->
+<script src='https://www.bing.com/api/maps/mapcontrol?callback=GetMap&key=AvDpfP2mhgsjKyTdfNyWXKGmo72SBfCvqYwQEvHUoMp9VM138Li7MhHQnSgQoQif' async defer></script>
+<script src="BmapQuery.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script type="module">
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getDatabase, ref, onValue, push, set, get , child, update, remove, onChildAdded, onChildChanged, onChildRemoved } 
+from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getStorage, ref as storageRef, uploadBytes,getDownloadURL, getBlob } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
+
+// Firebase設定
+const firebaseConfig = {
+    apiKey: "AIzaSyCjms3x3KlJRmCR03mMXGwmox2imjuxYQg",
+    authDomain: "commonapli.firebaseapp.com",
+    projectId: "commonapli",
+    storageBucket: "commonapli.appspot.com",
+    messagingSenderId: "955179997465",
+    appId: "1:955179997465:web:b4c1f8155ee311256f4d88"
+  };
+
+const app= initializeApp(firebaseConfig);
+const db = getDatabase(app); 
+const dbRef = ref(db,"chat/message");
+
+// 投稿が現在時刻からどれくらい前に行われたかを計算する関数
+function getTimeDifferenceString(postDate) {
+    const now = new Date();
+    const diffMilliseconds = now - postDate;
+    const diffSeconds = Math.floor(diffMilliseconds / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 0) {
+        return `${diffDays}日前`;
+    } else if (diffHours > 0) {
+        return `${diffHours}時間前`;
+    } else if (diffMinutes > 0) {
+        return `${diffMinutes}分前`;
+    } else {
+        return 'たった今';
+    }
+}
+
+// 送信ボタンのクリックイベント
+$("#send").on("click", function(){
+    const msg = {
+      uname : $("#uname").val(),
+      text : $("#text").val(),
+      timestamp : new Date().getTime(),
+      likeCount: 0, // 初期いいね数を保存
+      // picture :imageUrl
+    } 
+  const newPostRef = push(dbRef); //ユニークキーを生成
+  set(newPostRef, msg);
+});
+
+// Firebaseからメッセージを受信して表示する処理
+onChildAdded(dbRef, function(data) {
+    const msg = data.val();
+    console.log(msg);
+    const postDate = new Date(msg.timestamp); // Firebaseから取得したタイムスタンプをDateオブジェクトに変換
+    const timeDifferenceString = getTimeDifferenceString(postDate);
+    const key =data.key;
+
+    let h = '<p id="'+key+'">';
+       h += `${msg.uname} (${timeDifferenceString})<br>`;
+       h += '<span contentEditable="true" id="'+key+'_update">'+msg.text+'</span>';
+       h += '<button class="likeButton"><i class="fas fa-heart"></i></button>';
+       h += `<span class="likeCount" data-key="'+key+'">0</span>`; // いいねの数を表示するスパン要素
+       h += '<button class="reply" data-key="'+key+'">返信</button>'; // 返信ボタンを追加
+       h += '<span class="remove" data-key="'+key+'">🚮</span>'
+       h += '<span class="update" data-key="'+key+'">🆙</span>'
+       h += '</p>';
+      //  h += '<button class="dl_button">File Download</button>';
+      //  h += '<img class="myimg">';
+       const $message = $(h);
+       $("#output").prepend($message);
+   
+
+      // 入力フォームをリセット
+    $("#uname").val("");
+    $("#text").val("");
+    $("#fileInput").val("");
+});
+
+// 削除イベント
+$("#output").on("click",".remove",function(){
+  const key =$(this).attr("data-key");
+  const remove_item =ref(db,"chat/message"+key);
+  remove(remove_item); //Firebaseデータ削除関数
+});
+
+// 更新イベント
+$("#output").on("click",".update",function(){
+  const key =$(this).attr("data-key");
+  update(ref(db,"chat/message"+key), {
+      text:$("#"+key+'_update').html()
+  });
+});
+
+// いいねの更新
+$("#output").on("click", ".likeCount", function() {
+    const key = $(this).attr("data-key");
+    
+    // いいねカウントを取得してインクリメント
+    const likeCountRef = ref(db, "chat/message");
+    get(likeCountRef).then((snapshot) => {
+        const currentLikeCount = snapshot.val();
+        const newLikeCount = currentLikeCount + 1;
+
+        // Firebase Realtime Databaseにいいねカウントを更新する
+        update(ref(db, "chat/message"), {
+            likeCount: newLikeCount
+        }).then(() => {
+            console.log("いいねが正常に更新されました。");
+            // 更新成功時の処理をここに追加
+        }).catch((error) => {
+            console.error("いいねの更新中にエラーが発生しました。", error);
+            // エラーハンドリング：エラーが発生した場合の処理をここに追加
+        });
+    });
+});
+
+// 削除処理がfirebase側で実行されたらイベント発生！
+onChildRemoved(dbRef,(data)=> {
+  $("#"+data.key).remove();  //DOM操作関数（対象を削除）
+})
+
+// 更新処理がfirebase側で実行されたらイベント発生！
+onChildChanged(dbRef,(data)=>{
+  $("#"+data.key+'_update').html(data.val().text);
+  $("#"+data.key+'_update').fadeOut(800).fadeIn(800);
+});
+
+// 返信ボタンのクリックイベント
+$("#output").on("click",".reply", function() {
+    console.log("OK");
+
+  const key = $(this).attr("data-key");
+  $("#reply2").attr("data-key", key);
+  
+  // Firebase Realtime Databaseからデータを取得
+    const dbRef = ref(getDatabase());
+
+    // get(child(dbRef,key).then((snapshot) => {
+    // if (snapshot.exists()) {
+    //  console.log(snapshot.val());
+    //  const msg =snapshot.val();
+    //  const postDate = new Date(msg.timestamp);
+    //  const timeDifferenceString = getTimeDifferenceString(postDate);
+    //  let h = '<p id="'+key+'">';
+    //    h += `${msg.uname} (${timeDifferenceString})<br>`;
+    //    h += '<span contentEditable="true" id="'+key+'_update">'+msg.text+'</span>';
+    //    h += '<button class="likeButton"><i class="fas fa-heart"></i></button>';
+    //    h += `<span class="likeCount" data-key="'+key+'">0</span>`; // いいねの数を表示するスパン要素
+    //    h += '<button class="reply" data-key="'+key+'">返信</button>'; // 返信ボタンを追加
+    //    h += '<span class="remove" data-key="'+key+'">🚮</span>'
+    //    h += '<span class="update" data-key="'+key+'">🆙</span>'
+    //    h += '</p>';
+    //    const $message = $(h);
+    //    $("#replyContainer").append($message);
+    // } 
+  
+    
+   
+    $("#tsunashima").hide();
+    $(".main").hide();
+    $("#replyInput").show();
+    
+    });
+// 返信送信のクリックイベント
+$("#reply2").on("click", function() {
+    const key = $(this).attr("data-key");
+    console.log(key);
+    // ユーザー入力の取得
+    const uname = $("#uname2").val();
+    const text = $("#text2").val();
+    const replyData = {
+        text: text,
+        uname: uname,
+        timestamp: new Date().getTime() // タイムスタンプの設定
+    };
+
+    // Firebase Realtime Databaseに返信データを保存する
+    const replyRef = ref(db, `chat/message/${key}/replies`);
+    const newReplyRef = push(replyRef); //ユニークキーを生成
+
+    // 返信を投稿の下に保存する
+    set(newReplyRef, replyData)
+        .then(() => {
+            console.log("返信が正常に送信されました。");
+            // 送信成功の場合、適切なフィードバックをユーザーに提供するなどの処理を追加
+        })
+        .catch((error) => {
+            console.error("返信の送信中にエラーが発生しました。", error);
+            // エラーハンドリング：エラーが発生した場合に適切なフィードバックをユーザーに提供するなどの処理を追加
+        });
+
+      
+// 返信を表示
+onChildAdded(replyRef, function(data) {
+    const replyData = data.val();
+    const postDate = new Date(replyData.timestamp); // Firebaseから取得したタイムスタンプをDateオブジェクトに変換
+    const timeDifferenceString = getTimeDifferenceString(postDate);
+    const key = data.key;
+
+        let h = '<p id="' + key + '">';
+        h += `${replyData.uname} (${timeDifferenceString})<br>`;
+        h += '<span contentEditable="true" id="' + key + '_update">' + replyData.text + '</span>';
+        h += '<button class="likeButton"><i class="fas fa-heart"></i></button>';
+        h += `<span class="likeCount" data-key="${key}">0</span>`; // いいねの数を表示するスパン要素
+        h += '<span class="remove" data-key="' + key + '">🚮</span>'
+        h += '<span class="update" data-key="' + key + '">🆙</span>'
+        h += '</p>';
+        const $message = $(h);
+        $("#replyContainer").append($message);
+        });
+      }); 
+
+  
+// 戻るボタンを押したとき
+$("#return").on("click",function(){
+  $(".main").show();
+  $("#replyInput").hide();
+  $("#tsunashima").show();
+  $("#output").show();
+
+    })
+</script>
+
+<style>
+    .likeButton {
+        background-color: transparent;
+        border: none;
+        cursor: pointer;
+        color: #0000FF;
+        outline: none;
+    }
+    
+    /* .likeButton.liked {
+        color: #FF0000;
+    } */
+    </style> 
+
+</body>
+</html>

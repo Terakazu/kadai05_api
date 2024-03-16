@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/sample.css">
+    <title>ご近所コミュニティチャットアプリ</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+   
+</head>
+<body>
+
+    <header>
+       
+    <h1>ご近所コミュニティ</h1> 
+    <p>街の情報を共有しよう！</p>
+    <!-- <img id="tsunashima" src="img/tsunashima_01.jpg"> -->
+    </header>
+
+    <!-- コンテンツ表示画面 -->
+     <!--MAPを表示する (header固定) -->
+     <div id="geocode">※地図上で場所を指定してください</div>
+     <div id="myMap"
+     style="position: relative; width: 100%; height: 450px;"></div>
+     <!--MAP[END]-->
+    <div class="container">
+        <div class="main">
+            <div class="content"> 名前 ：<input type="text" id="uname"></div>
+            <div class="content"> コメント   ：
+                <textarea id="text" cols="30" rows="10"></textarea><br>
+                <input type="file" id="fileInput"> 
+                <!-- <form type="file" id="form">フォーム</form>
+                <button id="dl-button">ダウンロード</button> -->
+                <img id="preview" src="" style="display: none;"> 
+                <button id="send">送信</button><br>
+            </div>
+         </div>
+    </div>
+    
+    
+    <div id="output" style="overflow: auto;height: 1000px;">
+ 
+    </div>
+</div>
+
+<div id="replyInput" style="display: none;">
+  <div class="replyzone">
+    <div>名前：<input type="text" id="uname2"></div>
+    <div>
+        <textarea id="text2" cols="30" rows="10"></textarea>
+       
+        <button id="reply2">送信</button>
+        <button id="return">戻る</button>
+    </div>
+  </div>
+   <div id="replyContainer" style="overflow: auto;height: 1000px;"></div>
+</div>
+
+<!-- コメント表示用の要素 -->
+
+<!-- JQuery -->
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script type="module">
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getDatabase, ref, onValue, push, set, get , child, update, remove, onChildAdded, onChildChanged, onChildRemoved,runTransaction } 
+from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getStorage, ref as storageRef ,uploadBytes,getDownloadURL, getBlob } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
+
+
+
+const app= initializeApp(firebaseConfig);
+const db = getDatabase(app); 
+const dbRef = ref(db,"chat/message");
+const storage = getStorage(app);
+const inputRef = document.querySelector("#fileInput");
+const formRef = document.querySelector("#form");
+
+
+// 投稿が現在時刻からどれくらい前に行われたかを計算する関数
+function getTimeDifferenceString(postDate) {
+    const now = new Date();
+    const diffMilliseconds = now - postDate;
+    const diffSeconds = Math.floor(diffMilliseconds / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 0) {
+        return `${diffDays}日前`;
+    } else if (diffHours > 0) {
+        return `${diffHours}時間前`;
+    } else if (diffMinutes > 0) {
+        return `${diffMinutes}分前`;
+    } else {
+        return 'たった今';
+    }
+}
+
+// "fileInput" の変更イベントを監視
+$("#fileInput").on("change", async function() {
+    // 選択されたファイルを取得
+    const file = this.files[0];
+    
+    // ファイルをプレビューするための処理
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        // プレビュー用の要素に画像を表示
+        $("#preview").attr("src", e.target.result);
+    };
+    reader.readAsDataURL(file);
+    $("#preview").show();
+});
+
+const bucketName = "gs://commonapli.appspot.com"; // Firebase Storageのバケット名を設定
+const handleSubmit = async () => {
+  const file = inputRef.files[0];
+  if (!file) {
+        console.log("No file selected.");
+        return null; // ファイルが選択されていない場合はnullを返す
+  }
+
+  const ext = file.name.split(".").pop();
+  const fileName = `${Date.now()}.${ext}`;
+  const filePath = `images/${fileName}`;
+  console.log(filePath);
+  const fileRef = storageRef(storage, filePath);
+  console.log(fileRef);
+  await uploadBytes(fileRef, file);
+  console.log("Uploaded a blob or file!");
+
+  // フォームを送信したときにファイル名を返す
+  return fileName;
+
+};
+
+// formRef.addEventListener("click", handleSubmit);
+
+const buttonRef = document.querySelector("#dl-button");
+const imageRef = document.querySelector("#img");
+
+const handleDownload = async () => {
+  const fileName = await handleSubmit(); // フォームを送信してファイル名を取得
+  const fileRef = storageRef(storage, `images/${fileName}`);
+  const url = await getDownloadURL(fileRef);
+  console.log(url);
+
+
+};
+
+// buttonRef.addEventListener("click", handleDownload);
+
+// 送信ボタンのクリックイベント
+$("#send").on("click",async function(){
+   const aa =JSON.parse(localStorage.getItem("map"))
+   console.log(aa,"ローカルストレージ");
+
+    // ユーザーの位置情報を取得
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(async function(data) {
+            // const lat = data.coords.latitude;
+            // const lon = data.coords.longitude;
+            // console.log(lat,lon,"送信");
+
+            // 画像のアップロード処理と同様に、位置情報を含めてメッセージを作成
+            const fileName = await handleSubmit(); // フォームを送信してファイル名を取得
+            let imageURL = null;
+            if (fileName) {
+                const fileRef = storageRef(storage, `images/${fileName}`);
+                imageURL = await getDownloadURL(fileRef);
+            }
+   
+    
+    const msg = {
+        uname: $("#uname").val(),
+        text: $("#text").val(),
+        timestamp: new Date().getTime(),
+        likeCount: 0,
+        imageURL: imageURL, // imageURL フィールドに URL を追加
+        latitude: aa.lat, // ユーザーの緯度を追加
+        longitude: aa.lon // ユーザーの経度を追加
+    };
+
+    const newPostRef = push(dbRef);
+    set(newPostRef, msg); // コメントデータを Realtime Database に保存
+});
+} else {
+        console.log("Geolocation is not supported by this browser.");
+}
+});
+
+// Firebaseからメッセージを受信して表示する処理
+onChildAdded(dbRef, function(data) {
+    const msg = data.val();
+    console.log(msg);
+    const postDate = new Date(msg.timestamp); // Firebaseから取得したタイムスタンプをDateオブジェクトに変換
+    const timeDifferenceString = getTimeDifferenceString(postDate);
+    const key =data.key;
+    console.log(key);
+
+    // Firebase Realtime Databaseからいいねの数を取得
+    const likeCountRef = ref(db, `chat/message/${key}/likeCount`);
+    get(likeCountRef).then((snapshot) => {
+        const likeCount = snapshot.val() || 0; // もしデータが存在しない場合は0を設定
+
+    let h = '<div id="'+key+'" class="post">';
+       h += '<p>';
+       h += `${msg.uname} (${timeDifferenceString})<br>`;
+
+       // コメントが長い場合は一部を表示し、省略記号を追加
+        const maxCommentLength = 50; // 表示するコメントの最大文字数
+        const truncatedComment = msg.text.length > maxCommentLength ? msg.text.substring(0, maxCommentLength) + "..." : msg.text;
+        h += '<span contentEditable="true" id="' + key + '_update">' + truncatedComment + '</span>';
+
+       h += '<button class="likeButton"><i class="fas fa-heart"></i></button>';
+       h += `<span class="likeCount" data-key="${key}">${likeCount}</span>`; // Firebaseから取得したいいねの数を表示
+       h += '<button class="reply" data-key="'+key+'">返信</button>'; // 返信ボタンを追加
+       h += '<span class="remove" data-key="'+key+'">🚮</span>'
+       h += '<span class="update" data-key="'+key+'">🆙</span>'
+       h += '</p>';
+    // 画像が存在する場合のみ画像を追加
+    if (msg.imageURL) {
+       h += `<img class="myimg" src="${msg.imageURL}">`;
+    }
+    
+    h += '</div>';
+    const $message = $(h);
+    $("#output").prepend($message);
+}).catch((error) => {
+        console.error("いいねの数の取得中にエラーが発生しました。", error);
+        // エラーハンドリング
+    });
+
+  
+      // 入力フォームをリセット
+    $("#uname").val("");
+    $("#text").val("");
+    $("#fileInput").val("");
+    $("#preview").hide();
+});
+
+// ローカルストレージにデータを格納する関数
+function saveDataToLocalStorage(data) {
+  localStorage.setItem('coordinates', JSON.stringify(data));
+}
+
+// lan, lonデータをまとめてローカルストレージに格納
+const coordinatesArray = [];
+
+onValue(dbRef, (snapshot) => {
+  snapshot.forEach((record) => {
+    // 各レコードから "latitude" と "longitude" の値を取得し、配列に追加します。
+    const key     =record.key;
+    const latitude = record.val().latitude;
+    const longitude = record.val().longitude;
+
+    // チェックのためにコンソールにログを出力します。
+    console.log(key,latitude, longitude, "チェック2");
+
+    // 配列に経度と緯度をオブジェクトとして追加します。
+    coordinatesArray.push({ key,latitude, longitude });
+  });
+
+  // ローカルストレージにデータを格納します。
+  saveDataToLocalStorage(coordinatesArray);
+});
+
+   
+// 削除イベント
+$("#output").on("click",".remove",function(){
+  console.log("削除します");
+  const key =$(this).attr("data-key");
+  const remove_item =ref(db,"chat/message/"+key);
+  remove(remove_item); //Firebaseデータ削除関数
+});
+
+// 更新イベント
+$("#output").on("click",".update",function(){
+  console.log("更新します");
+  const key =$(this).attr("data-key");
+  update(ref(db,"chat/message/"+key), {
+      text:$("#"+key+'_update').html()
+  });
+});
+
+// 各メッセージのいいね数を保持するオブジェクト
+let likeCounts = {};
+
+// いいねボタンがクリックされたときの処理
+$("#output").on("click", ".likeButton", function() {
+    const key = $(this).closest('div.post').attr("id"); // メッセージのキーを取得
+
+    // キーが定義されているかどうかを確認
+    if (key) {
+        const likeCountRef = ref(db, "chat/message/" + key + "/likeCount");
+
+        // トランザクションを実行していいね数を更新
+        runTransaction(likeCountRef, (currentLikeCount) => {
+            return (currentLikeCount || 0) + 1;
+        }).then((transactionResult) => {
+            // トランザクションが正常に完了した場合の処理
+            if (transactionResult.committed) {
+                const newLikeCount = transactionResult.snapshot.val();
+                // 画面上にいいね数を反映
+                $(this).siblings(".likeCount").text(newLikeCount);
+                console.log("いいねが正常に更新されました。");
+            } else {
+                console.error("トランザクションが中止されました。");
+            }
+        }).catch((error) => {
+            console.error("いいねの更新中にエラーが発生しました。", error);
+            // エラーハンドリング
+        });
+    } else {
+        console.error("キーが見つかりませんでした。");
+    }
+});
+
+// 画面に表示される際の処理
+// Firebaseからデータを取得してローカルのいいね数と同期させる
+function displayMessages() {
+    // Firebase Realtime Databaseからデータを取得
+    const dbRef = ref(getDatabase());
+    // 各メッセージのいいね数を取得して表示
+    $(".post").each(function() {
+        const key = $(this).attr("id");
+        const likeCountRef = ref(db, "chat/message/" + key + "/likeCount");
+        get(likeCountRef).then((snapshot) => {
+            const likeCount = snapshot.val() || 0;
+            $(this).find(".likeCount").text(likeCount);
+        }).catch((error) => {
+            console.error("いいね数の取得中にエラーが発生しました。", error);
+            // エラーハンドリング
+        });
+    });
+}
+
+
+
+// 削除処理がfirebase側で実行されたらイベント発生！
+onChildRemoved(dbRef,(data)=> {
+  $("#"+data.key).remove();  //DOM操作関数（対象を削除）
+})
+
+// 更新処理がfirebase側で実行されたらイベント発生！
+onChildChanged(dbRef,(data)=>{
+    const newText = data.val().text || ''; // 新しいテキストを取得する。テキストが未定義の場合は空文字列にする
+    $("#"+data.key+'_update').html(newText); // テキストを更新
+    $("#"+data.key+'_update').fadeOut(800).fadeIn(800); // フェードイン・アウト
+});
+
+// 返信ボタンのクリックイベント
+$("#output").on("click", ".reply", function() {
+    // 表示後の処理
+    $("#tsunashima").hide();
+    $(".main").hide();  
+    $("#replyInput").show();
+    $("#output").hide();
+    $("#geocode").hide();
+
+    const key = $(this).attr("data-key"); 
+    console.log(key,"ハテナ");
+    localStorage.setItem("pin",key);
+    localStorage.getItem("pin",key);
+    $("#reply2").attr("data-key", key);
+
+    // Firebase Realtime Databaseからデータを取得
+    const dbRef = ref(getDatabase());
+
+    get(child(dbRef, "chat/message/"+key)).then((snapshot) => {
+    if (snapshot.exists()) {
+        console.log(snapshot.val());   //snapshotで同じキーの返信全部を取得してきている
+        const msg = snapshot.val();
+        const postDate = new Date(msg.timestamp);
+        const timeDifferenceString = getTimeDifferenceString(postDate);
+
+        // 元の投稿メッセージの表示       
+        let m = '<div id="${key}" class="post3">';
+           m += '<p>';
+           m += `${msg.uname} (${timeDifferenceString})<br>`;
+           m += `${msg.text}`;
+           m += '<button class="likeButton"><i class="fas fa-heart"></i></button>';
+           m +=`<span class="likeCount">${msg.likeCount}</span>`; 
+        //    m += `<span class="likeCount" data-key="${key}">${msg.likeCount}</span>`; // Firebaseから取得したいいねの数を表示
+           m += '</p>';
+        let picture = '';
+        if(msg.imageURL) {
+           m += `<img src="${msg.imageURL}">`; 
+        }
+        m += '</div>'
+        const $message = $(m);
+        $("#replyContainer").html($message);
+
+        //地図を表示
+     const lat =msg.latitude;
+     const lon =msg.longitude;
+     console.log(lat,lon,"チェック");
+     const map=new Microsoft.Maps.Map("#myMap",{
+        center :new Microsoft.Maps.Location(lat, lon),
+        zoom:17,
+      });
+      let pin = new Microsoft.Maps.Pushpin(map.getCenter(), {
+        color:'red',
+        draggable:true,
+        enableClickedStyle:true,
+        enableHoverStyle:true,
+        visible:true
+      });
+      map.entities.push(pin);
+    }
+   
+            // その他の返信の表示
+            const replyRef = ref(db, `chat/message/${key}/replies`); 
+            onChildAdded(replyRef, function(data) {
+                const replyData = data.val();
+                const postDate = new Date(replyData.timestamp); // Firebaseから取得したタイムスタンプをDateオブジェクトに変換
+                const timeDifferenceString = getTimeDifferenceString(postDate);
+                const replyKey = data.key;
+                console.log(replyKey);
+
+                let t = '<div id="'+key+'" class="post2">';
+                   t += '<p>';
+                   t += `${replyData.uname} (${timeDifferenceString})<br>`;
+                   t += '<span contentEditable="true" id="' + key + '_update">' + replyData.text + '</span>';
+                   t += '<button class="likeButton"><i class="fas fa-heart"></i></button>';
+                //    t += `<span class="likeCount" data-key="${key}">${replyData.likeCount}</span>`; // Firebaseから取得したいいねの数を表示
+                   t += '</p>';
+                   t += '</div>';
+                const $message = $(t);
+                $("#replyContainer").append($message);
+   
+ 
+        
+
+     
+    });
+})
+
+            // 返信送信のクリックイベント
+$("#reply2").on("click", function() {
+    const key = $(this).attr("data-key");
+    console.log(key);
+    // ユーザー入力の取得
+    const uname = $("#uname2").val();
+    const text = $("#text2").val();
+    const replyData = {
+        text: text,
+        uname: uname,
+        timestamp: new Date().getTime(), // タイムスタンプの設定
+        // likeCount:0
+    };
+
+    // Firebase Realtime Databaseに返信データを保存する
+    const replyRef = ref(db, `chat/message/${key}/replies`);
+    const newReplyRef = push(replyRef); //ユニークキーを生成
+
+    // 返信を投稿の下に保存する
+    set(newReplyRef, replyData)
+        .then(() => {
+            console.log("返信が正常に送信されました。");
+            // 送信成功の場合、適切なフィードバックをユーザーに提供するなどの処理を追加
+
+            // 入力フィールドをクリア
+            $("#uname2").val("");
+            $("#text2").val("");
+        });
+    });
+
+//     // いいねボタンがクリックされたときの処理
+// $("#replyContainer").on("click", ".likeButton", function() {
+//     const key = $(this).attr("data-key"); 
+//     console.log(key);
+
+//     // キーが定義されているかどうかを確認
+//         if (replykey) {
+//         // トランザクションを実行していいね数を更新
+//         runTransaction(likeCountRef, (currentLikeCount) => {
+//             return (currentLikeCount || 0) + 1;
+//         }).then((transactionResult) => {
+//             // トランザクションが正常に完了した場合の処理
+//             if (transactionResult.committed) {
+//                 const newLikeCount = transactionResult.snapshot.val();
+//                 // 画面上にいいね数を反映
+//                 $(this).siblings(".likeCount").text(newLikeCount);
+//                 console.log("いいねが正常に更新されました。");
+//             } else {
+//                 console.error("トランザクションが中止されました。");
+//             }
+//         }).catch((error) => {
+//             console.error("いいねの更新中にエラーが発生しました。", error);
+//             // エラーハンドリング
+//         });
+//     } else {
+//         console.error("キーが見つかりませんでした。");
+//     }
+});
+      
+// 戻るボタンを押したとき
+$("#return").on("click", function() {
+    $(".main").show();
+    $("#replyInput").hide();
+    $("#tsunashima").show();
+    $("#output").show();
+});
+
+
+
+</script>
+<script src='https://www.bing.com/api/maps/mapcontrol?callback=GetMap&key=[**MAPKEY**]' async defer></script>
+<script src="https://cdn.jsdelivr.net/gh/yamazakidaisuke/BmapQuery/js/BmapQuery.js"></script>
+<script>
+function GetMap(){
+    //------------------------------------------------------------------------
+    //1. Instance
+    //------------------------------------------------------------------------
+    const map = new Bmap("#myMap");
+    
+    //------------------------------------------------------------------------
+    //2. Display Map
+    //   startMap(lat, lon, "MapType", Zoom[1~20]);
+    //   MapType:[load, aerial,canvasDark,canvasLight,birdseye,grayscale,streetside]
+    //--------------------------------------------------
+    map.startMap(35.5367225126281, 139.6344014093647, "load", 15);
+
+    //----------------------------------------------------
+    //3. Geocode(2 patterns)
+    // getGeocode("searchQuery",callback);
+    //----------------------------------------------------
+    
+
+    
+    // //B.Get geocode of click location
+    map.onGeocode("click", function(data){
+        console.log(data);                   //Get Geocode ObjectData
+        // const lat = data.location.latitude;  //Get latitude
+        // const lon = data.location.longitude; //Get longitude
+         lat = data.location.latitude;  //Get latitude
+         lon = data.location.longitude; //Get longitude
+        console.log(lat,lon,"チェック");
+        const v ={
+            lat: lat,lon:lon
+        }
+        const vv =JSON.stringify(v)
+
+        localStorage.setItem("map",vv);
+       
+
+        document.querySelector("#geocode").innerHTML=lat+','+lon;
+        let pin = map.pinIcon(lat, lon, "../img/poi_custom.png", 1.0, 0, 0);
+    });
+
+
+        // // JSONから取得した緯度と経度
+        // const aa = JSON.parse(localStorage.getItem("map"));
+        // const latitude = aa.lat;
+        // const longitude = aa.lon;
+
+        // // BmapQueryを使用して地図上にピンを追加する
+        // function GetMap(){
+        // const map = new Bmap("#myMap");
+        // map.startMap(latitude, longitude, "load", 15); // ピンを追加する地点を中心に地図を表示
+        // const pin = map.pin(latitude, longitude, "#ff0000"); // ピンを追加
+        // }
+
+        
+        const bb =JSON.parse(localStorage.getItem("coordinates"))
+        console.log(bb,"ローカルストレージ");
+
+        for (let i = 0; i < bb.length; i++) {
+    const latitude = bb[i].latitude;
+    const longitude = bb[i].longitude;
+    const key      =bb[i].key;
+    
+//     let clickedLocation;
+//     map.onGeocode("click", function(data) {
+//     const lat = data.location.latitude;
+//     const lon = data.location.longitude;
+
+//     // グローバル関数を呼び出して緯度と経度を保存
+//     saveClickedLocation(lat, lon);
+// });
+
+// // グローバル関数を定義
+// function saveClickedLocation(lat, lon) {
+//     clickedLocation = { lat, lon };
+// }
+    
+        let pin = map.pinText(latitude, longitude, "title","subtitle","Click");
+       map.onPin(pin, "click", function(){
+        localStorage.setItem("pin",key);
+        console.log(key);
+        $("#replyContainer").show();
+        $(".main").hide();  
+    $("#replyInput").show();
+    $("#output").hide();
+    $("#geocode").hide();
+
+    
+  
+    })
+} 
+
+}
+
+    
+</script>
+
+
+</body>
+</html> 

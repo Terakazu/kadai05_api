@@ -1,0 +1,123 @@
+img {
+    width :1000px;
+    height :300px;
+    object-fit: contain;
+}
+
+button {
+    background-color: lightblue;
+    border: none;
+}
+
+body{
+    margin:0;
+    padding:0;
+    text-align:left;
+    font-size: 32px;
+    background-color: #ffe6e6;
+}
+
+.content {
+    font-size: 18px;
+}
+
+input {
+    width:200px;
+}
+
+#uname {
+    margin-left:10px;
+}
+
+#output {
+    font-size: 12px;
+}
+
+#replyContainer {
+    font-size: 12px;
+}
+
+#mymap {
+    width:1000px;
+    height:500px;
+}
+
+h3 {
+    margin:0;
+}
+
+.map {
+    width:1000px;
+    height:600px;
+    padding:0;
+    margin:0;
+}
+
+.post {
+    width:1000px;
+    border-top: 1px solid #ccc; 
+    border-right:1px solid #ccc; 
+    border-left:1px solid #ccc; 
+    border-bottom: 1px solid #ccc; /* 境界線のスタイルを指定 */
+    padding-bottom: 10px; /* 必要に応じて下部の余白を指定 */
+    margin: 0 auto;
+    margin-top:10px;
+    background-color :cornsilk;
+    padding-top: 10px;
+}
+
+.post img {
+    display: block; /* 画像をブロック要素として表示 */
+    max-width: 100%; /* 画像が親要素にフィットするようにする */
+    margin-top: 10px; /* 画像とテキストの間の余白を指定 */
+    margin : 0 auto;
+}
+
+.likeButton {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    color:red;
+    outline: none;
+}
+
+h1 {
+    font-size: 48px;
+    text-align: center;
+    font-weight:bold
+}
+
+p {
+    font-size: 24px;
+    text-align: center;
+}
+
+.container {
+    display: flex;
+    justify-content: center;
+}
+
+.post2 {
+    width:1000px;
+    border-top: 1px solid #ccc; 
+    border-right:1px solid #ccc; 
+    border-left:1px solid #ccc; 
+    border-bottom: 1px solid #ccc; /* 境界線のスタイルを指定 */
+    padding-bottom: 10px; /* 必要に応じて下部の余白を指定 */
+    margin: 0 auto;
+    margin-top:10px;
+    background-color :cornsilk
+}
+
+.post3 {
+    width:1000px;
+    border-top: 1px solid #ccc; 
+    border-right:1px solid #ccc; 
+    border-left:1px solid #ccc; 
+    border-bottom: 1px solid #ccc; /* 境界線のスタイルを指定 */
+    padding-bottom: 10px; /* 必要に応じて下部の余白を指定 */
+    margin: 0 auto;
+    margin-top:10px;
+    background-color :cornsilk
+
+}
