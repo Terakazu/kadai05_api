@@ -49,15 +49,7 @@ import { getDatabase, ref, onValue, push, set, get , child, update, remove, onCh
 from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { getStorage, ref as storageRef, uploadBytes,getDownloadURL, getBlob } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 
-// Firebase設定
-const firebaseConfig = {
-    apiKey: "AIzaSyCjms3x3KlJRmCR03mMXGwmox2imjuxYQg",
-    authDomain: "commonapli.firebaseapp.com",
-    projectId: "commonapli",
-    storageBucket: "commonapli.appspot.com",
-    messagingSenderId: "955179997465",
-    appId: "1:955179997465:web:b4c1f8155ee311256f4d88"
-  };
+
 
 const app= initializeApp(firebaseConfig);
 const db = getDatabase(app); 
